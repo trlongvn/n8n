@@ -21,7 +21,7 @@ import { HIGHEST_SHUTDOWN_PRIORITY } from '@/constants';
 import { EventService } from '@/events/event.service';
 import { assertNever, parseCommaSeparatedList } from '@/utils';
 
-import { JOB_TYPE_NAME, QUEUE_NAME } from './constants';
+import { JOB_TYPE_NAME, QUEUE_NAME, WORKER_RESTRICTION_REQUEUE_DELAY_MS } from './constants';
 import { JobProcessor } from './job-processor';
 import type {
 	JobQueue,
@@ -98,7 +98,7 @@ export class ScalingService {
 					);
 					// Move job back to queue with a short delay so another worker can pick it up
 					// This is expected behavior, not an error
-					await job.moveToDelayed(Date.now() + 1000); // 1 second delay
+					await job.moveToDelayed(Date.now() + WORKER_RESTRICTION_REQUEUE_DELAY_MS);
 					return { success: false };
 				}
 
