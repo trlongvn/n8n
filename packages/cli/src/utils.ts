@@ -122,3 +122,15 @@ export const getAllKeyPaths = (
 	}
 	return paths;
 };
+
+/**
+ * Parse a comma-separated string into an array of trimmed, non-empty strings.
+ * Used for parsing worker IDs from project allowedWorkers field.
+ */
+export function parseCommaSeparatedList(value: string | null | undefined): string[] {
+	if (!value) return [];
+	return value
+		.split(',')
+		.map((item) => item.trim())
+		.filter((item) => item.length > 0);
+}

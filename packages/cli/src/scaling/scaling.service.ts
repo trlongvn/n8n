@@ -19,7 +19,7 @@ import assert, { strict } from 'node:assert';
 import { ActiveExecutions } from '@/active-executions';
 import { HIGHEST_SHUTDOWN_PRIORITY } from '@/constants';
 import { EventService } from '@/events/event.service';
-import { assertNever } from '@/utils';
+import { assertNever, parseCommaSeparatedList } from '@/utils';
 
 import { JOB_TYPE_NAME, QUEUE_NAME } from './constants';
 import { JobProcessor } from './job-processor';
@@ -85,21 +85,21 @@ export class ScalingService {
 		this.assertWorker();
 		this.assertQueue();
 
-		const workerId = this.globalConfig.queue.worker.id;
+		// Get the configured worker ID (may be empty if no restrictions apply to this worker)
+		const configuredWorkerId = this.globalConfig.queue.worker.id;
 
 		void this.queue.process(JOB_TYPE_NAME, concurrency, async (job: Job) => {
 			try {
 				// Check if this worker is allowed to process this job based on project restrictions
-				const isAllowed = await this.isWorkerAllowedForJob(job, workerId);
+				const isAllowed = await this.isWorkerAllowedForJob(job, configuredWorkerId);
 				if (!isAllowed) {
 					this.logger.debug(
-						`Worker ${workerId || this.instanceSettings.hostId} is not allowed to process job ${job.id} for project ${job.data.projectId}. Skipping.`,
+						`Worker ${configuredWorkerId || this.instanceSettings.hostId} is not allowed to process job ${job.id} for project ${job.data.projectId}. Re-queuing with delay.`,
 					);
-					// Return the job to the queue by throwing a specific error that Bull will handle
-					// This allows another worker that IS allowed to pick up the job
-					throw new UnexpectedError('Worker not allowed for this project', {
-						extra: { workerId, projectId: job.data.projectId, jobId: job.id },
-					});
+					// Move job back to queue with a short delay so another worker can pick it up
+					// This is expected behavior, not an error
+					await job.moveToDelayed(Date.now() + 1000); // 1 second delay
+					return { success: false };
 				}
 
 				this.eventService.emit('job-dequeued', {
@@ -122,8 +122,8 @@ export class ScalingService {
 		});
 
 		this.logger.debug('Worker setup completed');
-		if (workerId) {
-			this.logger.info(`Worker configured with ID: ${workerId}`);
+		if (configuredWorkerId) {
+			this.logger.info(`Worker configured with ID: ${configuredWorkerId}`);
 		}
 	}
 
@@ -134,7 +134,7 @@ export class ScalingService {
 	 * - The project has no worker restrictions (allowedWorkers is null or empty)
 	 * - This worker's ID is in the project's allowedWorkers list
 	 */
-	private async isWorkerAllowedForJob(job: Job, workerId: string): Promise<boolean> {
+	private async isWorkerAllowedForJob(job: Job, configuredWorkerId: string): Promise<boolean> {
 		const { projectId } = job.data;
 
 		// If no projectId in job data, allow all workers (backwards compatibility)
@@ -143,7 +143,7 @@ export class ScalingService {
 		}
 
 		// If worker has no configured ID, allow all jobs (no restriction on this worker)
-		if (!workerId) {
+		if (!configuredWorkerId) {
 			return true;
 		}
 
@@ -158,18 +158,15 @@ export class ScalingService {
 			return true;
 		}
 
-		// Parse comma-separated worker IDs and check if this worker is allowed
-		const allowedWorkerIds = project.allowedWorkers
-			.split(',')
-			.map((id) => id.trim())
-			.filter((id) => id.length > 0);
+		// Parse comma-separated worker IDs using shared utility
+		const allowedWorkerIds = parseCommaSeparatedList(project.allowedWorkers);
 
 		// If the allowed list is empty, allow all workers
 		if (allowedWorkerIds.length === 0) {
 			return true;
 		}
 
-		return allowedWorkerIds.includes(workerId);
+		return allowedWorkerIds.includes(configuredWorkerId);
 	}
 
 	private async reportJobProcessingError(error: Error, job: Job) {

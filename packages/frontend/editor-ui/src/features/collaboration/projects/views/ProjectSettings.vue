@@ -199,8 +199,9 @@ const onAddWorkerId = () => {
 	const workerId = workerIdInput.value.trim();
 	if (!workerId) return;
 
-	// Don't add duplicates
-	if (formData.value.allowedWorkers?.includes(workerId)) {
+	// Don't add duplicates (trim stored values for comparison to handle edge cases)
+	const existingWorkerIds = formData.value.allowedWorkers?.map((w) => w.trim()) ?? [];
+	if (existingWorkerIds.includes(workerId)) {
 		workerIdInput.value = '';
 		return;
 	}
