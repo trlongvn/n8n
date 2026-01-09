@@ -29,6 +29,7 @@ import { UserError } from 'n8n-workflow';
 import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { ForbiddenError } from '@/errors/response-errors/forbidden.error';
 import { NotFoundError } from '@/errors/response-errors/not-found.error';
+import { parseCommaSeparatedList } from '@/utils';
 
 import { CacheService } from './cache/cache.service';
 import { RoleService } from './role.service';
@@ -266,15 +267,44 @@ export class ProjectService {
 
 	async updateProject(
 		projectId: string,
-		{ name, icon, description }: UpdateProjectDto,
+		{ name, icon, description, allowedWorkers }: UpdateProjectDto,
 	): Promise<void> {
-		const result = await this.projectRepository.update(
-			{ id: projectId, type: 'team' },
-			{ name, icon, description },
-		);
+		// Convert allowedWorkers array to comma-separated string for storage
+		const allowedWorkersStr = this.convertAllowedWorkersToString(allowedWorkers);
+
+		const updateData: Record<string, unknown> = {};
+		if (name !== undefined) updateData.name = name;
+		if (icon !== undefined) updateData.icon = icon;
+		if (description !== undefined) updateData.description = description;
+		if (allowedWorkersStr !== undefined) updateData.allowedWorkers = allowedWorkersStr;
+
+		const result = await this.projectRepository.update({ id: projectId, type: 'team' }, updateData);
 		if (!result.affected) {
 			throw new ProjectNotFoundError(projectId);
 		}
+	}
+
+	/**
+	 * Convert an array of worker IDs to a comma-separated string for database storage.
+	 * Returns undefined if the input is undefined (no update), null if empty (clear restrictions).
+	 */
+	private convertAllowedWorkersToString(allowedWorkers: string[] | undefined): string | null | undefined {
+		if (allowedWorkers === undefined) {
+			return undefined; // No update requested
+		}
+		if (allowedWorkers.length === 0) {
+			return null; // Clear restrictions
+		}
+		return allowedWorkers.join(',');
+	}
+
+	async getProjectAllowedWorkers(projectId: string): Promise<string[] | null> {
+		const project = await this.projectRepository.findOne({
+			where: { id: projectId },
+			select: ['allowedWorkers'],
+		});
+		if (!project) return null;
+		return parseCommaSeparatedList(project.allowedWorkers);
 	}
 
 	async getPersonalProject(user: User): Promise<Project | null> {

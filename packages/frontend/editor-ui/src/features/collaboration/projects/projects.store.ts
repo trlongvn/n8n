@@ -142,11 +142,12 @@ export const useProjectsStore = defineStore(STORES.PROJECTS, () => {
 	};
 
 	const updateProject = async (id: Project['id'], projectData: UpdateProjectDto): Promise<void> => {
-		const { name, icon, description } = projectData;
+		const { name, icon, description, allowedWorkers } = projectData;
 		const payload: UpdateProjectDto = {};
 		if (name !== undefined) payload.name = name;
 		if (icon !== undefined) payload.icon = icon;
 		if (description !== undefined) payload.description = description;
+		if (allowedWorkers !== undefined) payload.allowedWorkers = allowedWorkers;
 		await projectsApi.updateProject(rootStore.restApiContext, id, payload);
 		const projectIndex = myProjects.value.findIndex((p) => p.id === id);
 		const { name: nm, icon: ic, description: desc } = { name, icon, description };
@@ -159,6 +160,7 @@ export const useProjectsStore = defineStore(STORES.PROJECTS, () => {
 			if (nm !== undefined) currentProject.value.name = nm;
 			if (ic !== undefined) currentProject.value.icon = ic;
 			if (desc !== undefined) currentProject.value.description = desc;
+			if (allowedWorkers !== undefined) currentProject.value.allowedWorkers = allowedWorkers;
 		}
 	};
 

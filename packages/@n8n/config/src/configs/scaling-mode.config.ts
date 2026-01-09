@@ -20,6 +20,17 @@ class HealthConfig {
 }
 
 @Config
+class WorkerConfig {
+	/**
+	 * Unique identifier for this worker instance.
+	 * Used for project-based worker restrictions.
+	 * If not set, worker will accept jobs from all projects.
+	 */
+	@Env('N8N_WORKER_ID')
+	id: string = '';
+}
+
+@Config
 class RedisConfig {
 	/** Redis database for Bull queue. */
 	@Env('QUEUE_BULL_REDIS_DB')
@@ -117,4 +128,7 @@ export class ScalingModeConfig {
 
 	@Nested
 	bull: BullConfig;
+
+	@Nested
+	worker: WorkerConfig;
 }

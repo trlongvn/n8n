@@ -1,7 +1,7 @@
 import { isObjectLiteral, Logger } from '@n8n/backend-common';
 import { GlobalConfig } from '@n8n/config';
 import { Time } from '@n8n/constants';
-import { ExecutionRepository } from '@n8n/db';
+import { ExecutionRepository, ProjectRepository } from '@n8n/db';
 import { OnLeaderStepdown, OnLeaderTakeover, OnShutdown } from '@n8n/decorators';
 import { Container, Service } from '@n8n/di';
 import { ErrorReporter, InstanceSettings } from 'n8n-core';
@@ -19,9 +19,9 @@ import assert, { strict } from 'node:assert';
 import { ActiveExecutions } from '@/active-executions';
 import { HIGHEST_SHUTDOWN_PRIORITY } from '@/constants';
 import { EventService } from '@/events/event.service';
-import { assertNever } from '@/utils';
+import { assertNever, parseCommaSeparatedList } from '@/utils';
 
-import { JOB_TYPE_NAME, QUEUE_NAME } from './constants';
+import { JOB_TYPE_NAME, QUEUE_NAME, WORKER_RESTRICTION_REQUEUE_DELAY_MS } from './constants';
 import { JobProcessor } from './job-processor';
 import type {
 	JobQueue,
@@ -48,6 +48,7 @@ export class ScalingService {
 		private readonly executionRepository: ExecutionRepository,
 		private readonly instanceSettings: InstanceSettings,
 		private readonly eventService: EventService,
+		private readonly projectRepository: ProjectRepository,
 	) {
 		this.logger = this.logger.scoped('scaling');
 	}
@@ -84,8 +85,23 @@ export class ScalingService {
 		this.assertWorker();
 		this.assertQueue();
 
+		// Get the configured worker ID (may be empty if no restrictions apply to this worker)
+		const configuredWorkerId = this.globalConfig.queue.worker.id;
+
 		void this.queue.process(JOB_TYPE_NAME, concurrency, async (job: Job) => {
 			try {
+				// Check if this worker is allowed to process this job based on project restrictions
+				const isAllowed = await this.isWorkerAllowedForJob(job, configuredWorkerId);
+				if (!isAllowed) {
+					this.logger.debug(
+						`Worker ${configuredWorkerId || this.instanceSettings.hostId} is not allowed to process job ${job.id} for project ${job.data.projectId}. Re-queuing with delay.`,
+					);
+					// Move job back to queue with a short delay so another worker can pick it up
+					// This is expected behavior, not an error
+					await job.moveToDelayed(Date.now() + WORKER_RESTRICTION_REQUEUE_DELAY_MS);
+					return { success: false };
+				}
+
 				this.eventService.emit('job-dequeued', {
 					executionId: job.data.executionId,
 					workflowId: job.data.workflowId,
@@ -106,6 +122,55 @@ export class ScalingService {
 		});
 
 		this.logger.debug('Worker setup completed');
+		if (configuredWorkerId) {
+			this.logger.info(`Worker configured with ID: ${configuredWorkerId}`);
+		} else {
+			this.logger.warn(
+				'Worker started without N8N_WORKER_ID configured. This worker will bypass all project-based worker restrictions.',
+			);
+		}
+	}
+
+	/**
+	 * Check if this worker is allowed to process a job based on project restrictions.
+	 * Returns true if:
+	 * - The job has no projectId (legacy jobs or personal projects)
+	 * - The project has no worker restrictions (allowedWorkers is null or empty)
+	 * - This worker's ID is in the project's allowedWorkers list
+	 */
+	private async isWorkerAllowedForJob(job: Job, configuredWorkerId: string): Promise<boolean> {
+		const { projectId } = job.data;
+
+		// If no projectId in job data, allow all workers (backwards compatibility)
+		if (!projectId) {
+			return true;
+		}
+
+		// If worker has no configured ID, allow all jobs (no restriction on this worker)
+		if (!configuredWorkerId) {
+			return true;
+		}
+
+		// Fetch project's allowed workers
+		const project = await this.projectRepository.findOne({
+			where: { id: projectId },
+			select: ['allowedWorkers'],
+		});
+
+		// If project not found or has no restrictions, allow
+		if (!project || !project.allowedWorkers) {
+			return true;
+		}
+
+		// Parse comma-separated worker IDs using shared utility
+		const allowedWorkerIds = parseCommaSeparatedList(project.allowedWorkers);
+
+		// If the allowed list is empty, allow all workers
+		if (allowedWorkerIds.length === 0) {
+			return true;
+		}
+
+		return allowedWorkerIds.includes(configuredWorkerId);
 	}
 
 	private async reportJobProcessingError(error: Error, job: Job) {

@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Logger } from '@n8n/backend-common';
 import { ExecutionsConfig } from '@n8n/config';
-import { ExecutionRepository } from '@n8n/db';
+import { ExecutionRepository, SharedWorkflowRepository } from '@n8n/db';
 import { Container, Service } from '@n8n/di';
 import type { ExecutionLifecycleHooks } from 'n8n-core';
 import { ErrorReporter, InstanceSettings, WorkflowExecute } from 'n8n-core';
@@ -63,6 +63,7 @@ export class WorkflowRunner {
 		private readonly executionDataService: ExecutionDataService,
 		private readonly eventService: EventService,
 		private readonly executionsConfig: ExecutionsConfig,
+		private readonly sharedWorkflowRepository: SharedWorkflowRepository,
 	) {}
 
 	/** The process did error */
@@ -372,12 +373,20 @@ export class WorkflowRunner {
 		loadStaticData?: boolean,
 		realtime?: boolean,
 	): Promise<void> {
+		// Get the project ID for this workflow (for worker restriction checks)
+		let projectId: string | undefined;
+		if (workflowId) {
+			const owningProject = await this.sharedWorkflowRepository.getWorkflowOwningProject(workflowId);
+			projectId = owningProject?.id;
+		}
+
 		const jobData: JobData = {
 			workflowId,
 			executionId,
 			loadStaticData: !!loadStaticData,
 			pushRef: data.pushRef,
 			streamingEnabled: data.streamingEnabled,
+			projectId,
 		};
 
 		if (!this.scalingService) {

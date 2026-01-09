@@ -4,6 +4,12 @@ export const QUEUE_NAME = 'jobs';
 
 export const JOB_TYPE_NAME = 'job';
 
+/**
+ * Delay (in milliseconds) before re-queuing a job that was rejected due to worker restrictions.
+ * This delay prevents tight loops when a worker repeatedly picks up and rejects the same job.
+ */
+export const WORKER_RESTRICTION_REQUEUE_DELAY_MS = 1000;
+
 /** Pubsub channel for commands sent by a main process to workers or to other main processes. */
 export const COMMAND_PUBSUB_CHANNEL = 'n8n.commands';
 
