@@ -124,6 +124,10 @@ export class ScalingService {
 		this.logger.debug('Worker setup completed');
 		if (configuredWorkerId) {
 			this.logger.info(`Worker configured with ID: ${configuredWorkerId}`);
+		} else {
+			this.logger.warn(
+				'Worker started without N8N_WORKER_ID configured. This worker will bypass all project-based worker restrictions.',
+			);
 		}
 	}
 
