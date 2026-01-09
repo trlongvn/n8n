@@ -185,11 +185,16 @@ export class ProjectController {
 		_res: Response,
 		@Param('projectId') projectId: string,
 	): Promise<ProjectRequest.ProjectWithRelations> {
-		const [{ id, name, icon, type, description }, relations] = await Promise.all([
+		const [{ id, name, icon, type, description, allowedWorkers }, relations] = await Promise.all([
 			this.projectsService.getProject(projectId),
 			this.projectsService.getProjectRelations(projectId),
 		]);
 		const myRelation = relations.find((r) => r.userId === req.user.id);
+
+		// Convert comma-separated string to array for API response
+		const allowedWorkersArray = allowedWorkers
+			? allowedWorkers.split(',').filter((w) => w.length > 0)
+			: [];
 
 		return {
 			id,
@@ -197,6 +202,7 @@ export class ProjectController {
 			icon,
 			type,
 			description,
+			allowedWorkers: allowedWorkersArray,
 			relations: relations.map((r) => ({
 				id: r.user.id,
 				email: r.user.email,

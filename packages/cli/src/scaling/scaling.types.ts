@@ -20,6 +20,8 @@ export type JobData = {
 	loadStaticData: boolean;
 	pushRef?: string;
 	streamingEnabled?: boolean;
+	/** Project ID that owns this workflow - used for worker restrictions */
+	projectId?: string;
 };
 
 export type JobResult = {

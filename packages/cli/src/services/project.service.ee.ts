@@ -266,15 +266,36 @@ export class ProjectService {
 
 	async updateProject(
 		projectId: string,
-		{ name, icon, description }: UpdateProjectDto,
+		{ name, icon, description, allowedWorkers }: UpdateProjectDto,
 	): Promise<void> {
-		const result = await this.projectRepository.update(
-			{ id: projectId, type: 'team' },
-			{ name, icon, description },
-		);
+		// Convert allowedWorkers array to comma-separated string for storage
+		const allowedWorkersStr =
+			allowedWorkers !== undefined
+				? allowedWorkers.length > 0
+					? allowedWorkers.join(',')
+					: null
+				: undefined;
+
+		const updateData: Record<string, unknown> = {};
+		if (name !== undefined) updateData.name = name;
+		if (icon !== undefined) updateData.icon = icon;
+		if (description !== undefined) updateData.description = description;
+		if (allowedWorkersStr !== undefined) updateData.allowedWorkers = allowedWorkersStr;
+
+		const result = await this.projectRepository.update({ id: projectId, type: 'team' }, updateData);
 		if (!result.affected) {
 			throw new ProjectNotFoundError(projectId);
 		}
+	}
+
+	async getProjectAllowedWorkers(projectId: string): Promise<string[] | null> {
+		const project = await this.projectRepository.findOne({
+			where: { id: projectId },
+			select: ['allowedWorkers'],
+		});
+		if (!project) return null;
+		if (!project.allowedWorkers) return [];
+		return project.allowedWorkers.split(',').filter((w) => w.length > 0);
 	}
 
 	async getPersonalProject(user: User): Promise<Project | null> {

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Z } from 'zod-class';
 
 import {
+	projectAllowedWorkersSchema,
 	projectDescriptionSchema,
 	projectIconSchema,
 	projectNameSchema,
@@ -12,6 +13,7 @@ const updateProjectShape = {
 	name: projectNameSchema.optional(),
 	icon: projectIconSchema.optional(),
 	description: projectDescriptionSchema.optional(),
+	allowedWorkers: projectAllowedWorkersSchema.optional(),
 };
 
 export class UpdateProjectDto extends Z.class(updateProjectShape) {}

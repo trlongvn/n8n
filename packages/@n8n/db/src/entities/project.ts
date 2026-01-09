@@ -21,6 +21,13 @@ export class Project extends WithTimestampsAndStringId {
 	@Column({ type: 'varchar', length: 512, nullable: true })
 	description: string | null;
 
+	/**
+	 * Comma-separated list of worker IDs that are allowed to execute workflows in this project.
+	 * If null or empty, all workers are allowed.
+	 */
+	@Column({ type: 'text', nullable: true })
+	allowedWorkers: string | null;
+
 	@OneToMany('ProjectRelation', 'project')
 	projectRelations: ProjectRelation[];
 

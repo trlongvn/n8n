@@ -32,6 +32,8 @@ export type ProjectSharingData = {
 export type Project = ProjectSharingData & {
 	relations: ProjectRelation[];
 	scopes: Scope[];
+	/** List of worker IDs allowed to execute workflows in this project. Empty means all workers allowed. */
+	allowedWorkers?: string[];
 };
 export type ProjectListItem = ProjectSharingData & {
 	role: Role['slug'];

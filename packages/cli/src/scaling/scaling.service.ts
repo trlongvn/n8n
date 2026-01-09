@@ -1,7 +1,7 @@
 import { isObjectLiteral, Logger } from '@n8n/backend-common';
 import { GlobalConfig } from '@n8n/config';
 import { Time } from '@n8n/constants';
-import { ExecutionRepository } from '@n8n/db';
+import { ExecutionRepository, ProjectRepository } from '@n8n/db';
 import { OnLeaderStepdown, OnLeaderTakeover, OnShutdown } from '@n8n/decorators';
 import { Container, Service } from '@n8n/di';
 import { ErrorReporter, InstanceSettings } from 'n8n-core';
@@ -48,6 +48,7 @@ export class ScalingService {
 		private readonly executionRepository: ExecutionRepository,
 		private readonly instanceSettings: InstanceSettings,
 		private readonly eventService: EventService,
+		private readonly projectRepository: ProjectRepository,
 	) {
 		this.logger = this.logger.scoped('scaling');
 	}
@@ -84,8 +85,23 @@ export class ScalingService {
 		this.assertWorker();
 		this.assertQueue();
 
+		const workerId = this.globalConfig.queue.worker.id;
+
 		void this.queue.process(JOB_TYPE_NAME, concurrency, async (job: Job) => {
 			try {
+				// Check if this worker is allowed to process this job based on project restrictions
+				const isAllowed = await this.isWorkerAllowedForJob(job, workerId);
+				if (!isAllowed) {
+					this.logger.debug(
+						`Worker ${workerId || this.instanceSettings.hostId} is not allowed to process job ${job.id} for project ${job.data.projectId}. Skipping.`,
+					);
+					// Return the job to the queue by throwing a specific error that Bull will handle
+					// This allows another worker that IS allowed to pick up the job
+					throw new UnexpectedError('Worker not allowed for this project', {
+						extra: { workerId, projectId: job.data.projectId, jobId: job.id },
+					});
+				}
+
 				this.eventService.emit('job-dequeued', {
 					executionId: job.data.executionId,
 					workflowId: job.data.workflowId,
@@ -106,6 +122,54 @@ export class ScalingService {
 		});
 
 		this.logger.debug('Worker setup completed');
+		if (workerId) {
+			this.logger.info(`Worker configured with ID: ${workerId}`);
+		}
+	}
+
+	/**
+	 * Check if this worker is allowed to process a job based on project restrictions.
+	 * Returns true if:
+	 * - The job has no projectId (legacy jobs or personal projects)
+	 * - The project has no worker restrictions (allowedWorkers is null or empty)
+	 * - This worker's ID is in the project's allowedWorkers list
+	 */
+	private async isWorkerAllowedForJob(job: Job, workerId: string): Promise<boolean> {
+		const { projectId } = job.data;
+
+		// If no projectId in job data, allow all workers (backwards compatibility)
+		if (!projectId) {
+			return true;
+		}
+
+		// If worker has no configured ID, allow all jobs (no restriction on this worker)
+		if (!workerId) {
+			return true;
+		}
+
+		// Fetch project's allowed workers
+		const project = await this.projectRepository.findOne({
+			where: { id: projectId },
+			select: ['allowedWorkers'],
+		});
+
+		// If project not found or has no restrictions, allow
+		if (!project || !project.allowedWorkers) {
+			return true;
+		}
+
+		// Parse comma-separated worker IDs and check if this worker is allowed
+		const allowedWorkerIds = project.allowedWorkers
+			.split(',')
+			.map((id) => id.trim())
+			.filter((id) => id.length > 0);
+
+		// If the allowed list is empty, allow all workers
+		if (allowedWorkerIds.length === 0) {
+			return true;
+		}
+
+		return allowedWorkerIds.includes(workerId);
 	}
 
 	private async reportJobProcessingError(error: Error, job: Job) {

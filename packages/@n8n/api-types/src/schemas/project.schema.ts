@@ -14,6 +14,13 @@ export type ProjectIcon = z.infer<typeof projectIconSchema>;
 
 export const projectDescriptionSchema = z.string().max(512);
 
+/**
+ * Schema for allowed workers - an array of worker IDs that can execute workflows in this project.
+ * Empty array means no restrictions (all workers allowed).
+ */
+export const projectAllowedWorkersSchema = z.array(z.string().min(1)).max(100);
+export type ProjectAllowedWorkers = z.infer<typeof projectAllowedWorkersSchema>;
+
 export const projectRelationSchema = z.object({
 	userId: z.string().min(1),
 	role: assignableProjectRoleSchema,

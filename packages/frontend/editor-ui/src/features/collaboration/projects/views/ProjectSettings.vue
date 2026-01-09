@@ -67,13 +67,17 @@ const resourceCounts = ref<ResourceCounts>({
 	dataTables: -1,
 	workflows: -1,
 });
-const formData = ref<Pick<Project, 'name' | 'description' | 'relations'>>({
+const formData = ref<Pick<Project, 'name' | 'description' | 'relations' | 'allowedWorkers'>>({
 	name: '',
 	description: '',
 	relations: [],
+	allowedWorkers: [],
 });
 // Used to skip one watcher sync after targeted server updates (e.g., immediate removal)
 const suppressNextSync = ref(false);
+
+// Worker ID input for adding new allowed workers
+const workerIdInput = ref('');
 
 const nameInput = ref<InstanceType<typeof N8nFormInput> | null>(null);
 
@@ -191,6 +195,33 @@ const onTextInput = () => {
 	isDirty.value = true;
 };
 
+const onAddWorkerId = () => {
+	const workerId = workerIdInput.value.trim();
+	if (!workerId) return;
+
+	// Don't add duplicates
+	if (formData.value.allowedWorkers?.includes(workerId)) {
+		workerIdInput.value = '';
+		return;
+	}
+
+	if (!formData.value.allowedWorkers) {
+		formData.value.allowedWorkers = [];
+	}
+	formData.value.allowedWorkers.push(workerId);
+	workerIdInput.value = '';
+	isDirty.value = true;
+};
+
+const onRemoveWorkerId = (workerId: string) => {
+	if (!formData.value.allowedWorkers) return;
+	const idx = formData.value.allowedWorkers.indexOf(workerId);
+	if (idx !== -1) {
+		formData.value.allowedWorkers.splice(idx, 1);
+		isDirty.value = true;
+	}
+};
+
 async function onRemoveMember(userId: string) {
 	const current = projectsStore.currentProject;
 	if (!current) return;
@@ -240,6 +271,9 @@ const resetFormData = () => {
 		: [];
 	formData.value.name = projectsStore.currentProject?.name ?? '';
 	formData.value.description = projectsStore.currentProject?.description ?? '';
+	formData.value.allowedWorkers = projectsStore.currentProject?.allowedWorkers
+		? [...projectsStore.currentProject.allowedWorkers]
+		: [];
 };
 
 const onCancel = () => {
@@ -317,6 +351,7 @@ const updateProject = async () => {
 		await projectsStore.updateProject(projectsStore.currentProject.id, {
 			name: formData.value.name ?? '',
 			description: formData.value.description ?? '',
+			allowedWorkers: formData.value.allowedWorkers ?? [],
 		});
 		isDirty.value = false;
 	} catch (error) {
@@ -621,6 +656,56 @@ onMounted(async () => {
 				</div>
 			</fieldset>
 			<fieldset>
+				<h3>
+					<label for="allowedWorkers">{{
+						i18n.baseText('projects.settings.allowedWorkers.title')
+					}}</label>
+				</h3>
+				<small :class="$style.fieldHint" class="mb-s">{{
+					i18n.baseText('projects.settings.allowedWorkers.description')
+				}}</small>
+				<div :class="[$style.allowedWorkersInputRow, 'mb-s']">
+					<N8nInput
+						id="allowedWorkers"
+						v-model="workerIdInput"
+						:class="$style.workerIdInput"
+						:placeholder="i18n.baseText('projects.settings.allowedWorkers.placeholder')"
+						data-test-id="project-allowed-workers-input"
+						@keydown.enter.prevent="onAddWorkerId"
+					/>
+					<N8nButton
+						type="secondary"
+						native-type="button"
+						data-test-id="project-add-worker-button"
+						@click="onAddWorkerId"
+					>
+						{{ i18n.baseText('_reusableBaseText.add') }}
+					</N8nButton>
+				</div>
+				<small :class="$style.fieldHint" class="mb-s">{{
+					i18n.baseText('projects.settings.allowedWorkers.hint')
+				}}</small>
+				<div v-if="formData.allowedWorkers && formData.allowedWorkers.length > 0" :class="$style.workerTagsContainer">
+					<div
+						v-for="workerId in formData.allowedWorkers"
+						:key="workerId"
+						:class="$style.workerTag"
+						data-test-id="project-allowed-worker-tag"
+					>
+						<span>{{ workerId }}</span>
+						<N8nButton
+							type="tertiary"
+							size="small"
+							:class="$style.removeWorkerButton"
+							data-test-id="project-remove-worker-button"
+							@click="onRemoveWorkerId(workerId)"
+						>
+							<N8nIcon icon="times" size="small" />
+						</N8nButton>
+					</div>
+				</div>
+			</fieldset>
+			<fieldset>
 				<h3 class="mb-m">{{ i18n.baseText('projects.settings.danger.title') }}</h3>
 				<small :class="$style.danger">{{
 					i18n.baseText('projects.settings.danger.message')
@@ -746,5 +831,45 @@ onMounted(async () => {
 .danger {
 	display: block;
 	padding-bottom: var(--spacing--lg);
+}
+
+.fieldHint {
+	display: block;
+	color: var(--color-text-base);
+}
+
+.allowedWorkersInputRow {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing--xs);
+	max-width: var(--project-field--width);
+}
+
+.workerIdInput {
+	flex: 1;
+}
+
+.workerTagsContainer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing--xs);
+	max-width: var(--project-field--width);
+}
+
+.workerTag {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--spacing--2xs);
+	padding: var(--spacing--3xs) var(--spacing--xs);
+	background-color: var(--color-background-base);
+	border: 1px solid var(--color-foreground-base);
+	border-radius: var(--border-radius-base);
+	font-size: var(--font-size--s);
+}
+
+.removeWorkerButton {
+	padding: 0;
+	min-width: auto;
+	height: auto;
 }
 </style>
