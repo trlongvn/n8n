@@ -98,7 +98,12 @@ export class ScalingService {
 					);
 					// Move job back to queue with a short delay so another worker can pick it up
 					// This is expected behavior, not an error
-					await job.moveToDelayed(Date.now() + WORKER_RESTRICTION_REQUEUE_DELAY_MS);
+					// Re-add the job to the queue with a delay (Bull will assign a new job ID)
+					await this.queue.add(JOB_TYPE_NAME, job.data, {
+						delay: WORKER_RESTRICTION_REQUEUE_DELAY_MS,
+						priority: job.opts.priority,
+					});
+					// The current job will be marked as completed when we return
 					return { success: false };
 				}
 
