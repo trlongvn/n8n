@@ -76,4 +76,15 @@ export class SecurityConfig {
 	 */
 	@Env('N8N_GIT_NODE_ENABLE_ALL_CONFIG_KEYS')
 	enableGitNodeAllConfigKeys: boolean = false;
+
+	/**
+	 * Whether to allow embedding n8n in iframes from different origins.
+	 * When enabled, disables X-Frame-Options header. Use N8N_CONTENT_SECURITY_POLICY
+	 * to control which origins can embed n8n via the frame-ancestors directive.
+	 *
+	 * @example N8N_ALLOW_EMBEDDING=true
+	 * @example N8N_CONTENT_SECURITY_POLICY='{"frame-ancestors": ["https://example.com"]}'
+	 */
+	@Env('N8N_ALLOW_EMBEDDING')
+	allowEmbedding: boolean = false;
 }
