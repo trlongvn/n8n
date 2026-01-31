@@ -375,13 +375,15 @@ export class Server extends AbstractServer {
 			const isTLSEnabled =
 				this.globalConfig.protocol === 'https' && !!(this.sslKey && this.sslCert);
 			const isPreviewMode = process.env.N8N_PREVIEW_MODE === 'true';
+			const securityConfig = Container.get(SecurityConfig);
+			const allowEmbedding = securityConfig.allowEmbedding;
 			const cspDirectives = jsonParse<{ [key: string]: Iterable<string> }>(
-				Container.get(SecurityConfig).contentSecurityPolicy,
+				securityConfig.contentSecurityPolicy,
 				{
 					errorMessage: 'The contentSecurityPolicy is not valid JSON.',
 				},
 			);
-			const cspReportOnly = Container.get(SecurityConfig).contentSecurityPolicyReportOnly;
+			const cspReportOnly = securityConfig.contentSecurityPolicyReportOnly;
 			const securityHeadersMiddleware = helmet({
 				contentSecurityPolicy: isEmpty(cspDirectives)
 					? false
@@ -393,7 +395,9 @@ export class Server extends AbstractServer {
 							},
 						},
 				xFrameOptions:
-					isPreviewMode || inE2ETests || inDevelopment ? false : { action: 'sameorigin' },
+					isPreviewMode || inE2ETests || inDevelopment || allowEmbedding
+						? false
+						: { action: 'sameorigin' },
 				dnsPrefetchControl: false,
 				// This is only relevant for Internet-explorer, which we do not support
 				ieNoOpen: false,

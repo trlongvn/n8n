@@ -330,6 +330,7 @@ describe('GlobalConfig', () => {
 			awsSystemCredentialsAccess: false,
 			enableGitNodeHooks: false,
 			enableGitNodeAllConfigKeys: false,
+			allowEmbedding: false,
 		},
 		executions: {
 			mode: 'regular',
