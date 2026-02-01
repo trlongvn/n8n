@@ -20,7 +20,8 @@ import { formatPrivateKey } from '../../utils/utilities';
 export type BodyParameter = {
 	name: string;
 	value: string;
-	parameterType?: 'formBinaryData' | 'formData';
+	parameterType?: 'formBinaryData' | 'formData' | 'formBinaryDataAll';
+	inputDataFieldPattern?: string;
 };
 
 export type IAuthDataSanitizeKeys = {
@@ -265,6 +266,15 @@ export const prepareRequestBody = async (
 				const key = Object.keys(entry)[0];
 				const data = entry[key] as { value: Buffer; options: FormData.AppendOptions };
 				formData.append(key, data.value, data.options);
+				continue;
+			}
+
+			if (parameter.parameterType === 'formBinaryDataAll') {
+				const entries = await defaultReducer({}, parameter);
+				for (const [key, data] of Object.entries(entries)) {
+					const binaryData = data as { value: Buffer; options: FormData.AppendOptions };
+					formData.append(key, binaryData.value, binaryData.options);
+				}
 				continue;
 			}
 

@@ -482,6 +482,11 @@ export const mainProperties: INodeProperties[] = [
 								value: 'formBinaryData',
 							},
 							{
+								name: 'All Binary Files',
+								value: 'formBinaryDataAll',
+								description: 'Upload all binary files from input data',
+							},
+							{
 								name: 'Form Data',
 								value: 'formData',
 							},
@@ -492,6 +497,11 @@ export const mainProperties: INodeProperties[] = [
 						displayName: 'Name',
 						name: 'name',
 						type: 'string',
+						displayOptions: {
+							hide: {
+								parameterType: ['formBinaryDataAll'],
+							},
+						},
 						default: '',
 						description:
 							'ID of the field to set. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
@@ -520,6 +530,20 @@ export const mainProperties: INodeProperties[] = [
 						default: '',
 						description:
 							'The name of the incoming field containing the binary file data to be processed',
+					},
+					{
+						displayName: 'Field Name Pattern',
+						name: 'inputDataFieldPattern',
+						type: 'string',
+						displayOptions: {
+							show: {
+								parameterType: ['formBinaryDataAll'],
+							},
+						},
+						default: '',
+						placeholder: 'e.g., file*, image*, or leave empty for all',
+						description:
+							'Optional pattern to filter binary fields. Supports wildcards (*). Leave empty to upload all binary files.',
 					},
 				],
 			},
