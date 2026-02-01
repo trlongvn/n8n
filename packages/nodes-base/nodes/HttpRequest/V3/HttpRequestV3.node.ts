@@ -398,7 +398,13 @@ export class HttpRequestV3 implements INodeType {
 
 				const parametersToKeyValue = async (
 					accumulator: { [key: string]: any },
-					cur: { name: string; value: string; parameterType?: string; inputDataFieldName?: string },
+					cur: {
+						name: string;
+						value: string;
+						parameterType?: string;
+						inputDataFieldName?: string;
+						inputDataFieldPattern?: string;
+					},
 				) => {
 					if (cur.parameterType === 'formBinaryData') {
 						if (!cur.inputDataFieldName) return accumulator;
@@ -418,6 +424,46 @@ export class HttpRequestV3 implements INodeType {
 								contentType: binaryData.mimeType,
 							},
 						};
+						return accumulator;
+					}
+
+					if (cur.parameterType === 'formBinaryDataAll') {
+						const itemBinary = items[itemIndex].binary;
+						if (!itemBinary) return accumulator;
+
+						// Get pattern for filtering (if provided)
+						const pattern = cur.inputDataFieldPattern?.trim() || '';
+
+						// Helper function to match wildcards
+						const matchesPattern = (fieldName: string, pattern: string): boolean => {
+							if (!pattern) return true; // No pattern means match all
+							const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
+							const regex = new RegExp(`^${regexPattern}$`);
+							return regex.test(fieldName);
+						};
+
+						// Upload all binary files that match the pattern
+						for (const binaryFieldName of Object.keys(itemBinary)) {
+							if (!matchesPattern(binaryFieldName, pattern)) continue;
+
+							const binaryData = this.helpers.assertBinaryData(itemIndex, binaryFieldName);
+							let uploadData: Buffer | Readable;
+							const itemBinaryData = itemBinary[binaryFieldName];
+
+							if (itemBinaryData.id) {
+								uploadData = await this.helpers.getBinaryStream(itemBinaryData.id);
+							} else {
+								uploadData = Buffer.from(itemBinaryData.data, BINARY_ENCODING);
+							}
+
+							accumulator[binaryFieldName] = {
+								value: uploadData,
+								options: {
+									filename: binaryData.fileName,
+									contentType: binaryData.mimeType,
+								},
+							};
+						}
 						return accumulator;
 					}
 					updadeQueryParameter(accumulator, cur.name, cur.value);

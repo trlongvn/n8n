@@ -299,4 +299,195 @@ describe('HttpRequestV3', () => {
 			);
 		});
 	});
+
+	describe('Multiple Binary Files Upload', () => {
+		it('should upload all binary files with formBinaryDataAll parameter type', async () => {
+			// Mock version 4.2 to use multipart-form-data
+			(executeFunctions.getNode as jest.Mock).mockReturnValue({
+				type: 'n8n-nodes-base.httpRequest',
+				typeVersion: 4.2,
+			});
+
+			// Mock input data with multiple binary files
+			const inputData = [
+				{
+					json: {},
+					binary: {
+						file1: {
+							data: Buffer.from('file1 content').toString('base64'),
+							mimeType: 'text/plain',
+							fileName: 'file1.txt',
+							fileExtension: 'txt',
+						},
+						file2: {
+							data: Buffer.from('file2 content').toString('base64'),
+							mimeType: 'text/plain',
+							fileName: 'file2.txt',
+							fileExtension: 'txt',
+						},
+						image1: {
+							data: Buffer.from('image content').toString('base64'),
+							mimeType: 'image/png',
+							fileName: 'image1.png',
+							fileExtension: 'png',
+						},
+					},
+				},
+			];
+
+			(executeFunctions.getInputData as jest.Mock).mockReturnValue(inputData);
+
+			// Track parameters accessed
+			const parameterCalls: Record<string, any> = {};
+			(executeFunctions.getNodeParameter as jest.Mock).mockImplementation(
+				(paramName: string, itemIndex: number) => {
+					if (paramName === 'method') return 'POST';
+					if (paramName === 'url') return baseUrl;
+					if (paramName === 'authentication') return 'none';
+					if (paramName === 'sendBody') return true;
+					if (paramName === 'contentType') return 'multipart-form-data';
+					if (paramName === 'bodyParameters.parameters') {
+						return [
+							{
+								name: '',
+								value: '',
+								parameterType: 'formBinaryDataAll',
+								inputDataFieldPattern: '',
+							},
+						];
+					}
+					if (paramName === 'options') return options;
+					return undefined;
+				},
+			);
+
+			// Mock assertBinaryData to return proper binary data
+			(executeFunctions.helpers.assertBinaryData as jest.Mock).mockImplementation(
+				(itemIndex: number, fieldName: string) => {
+					return inputData[itemIndex].binary![fieldName];
+				},
+			);
+
+			const response = {
+				headers: { 'content-type': 'application/json' },
+				body: Buffer.from(JSON.stringify({ success: true })),
+			};
+
+			(executeFunctions.helpers.request as jest.Mock).mockResolvedValue(response);
+
+			const result = await node.execute.call(executeFunctions);
+
+			expect(result).toEqual([[{ json: { success: true }, pairedItem: { item: 0 } }]]);
+
+			// Verify that request was called with formData containing all files
+			const requestCall = (executeFunctions.helpers.request as jest.Mock).mock.calls[0][0];
+			expect(requestCall.formData).toBeDefined();
+
+			// Verify all three binary files are in formData
+			const formData = requestCall.formData;
+			expect(formData.file1).toBeDefined();
+			expect(formData.file2).toBeDefined();
+			expect(formData.image1).toBeDefined();
+
+			// Verify the structure of each entry
+			expect(formData.file1.value).toBeInstanceOf(Buffer);
+			expect(formData.file1.options.filename).toBe('file1.txt');
+			expect(formData.file2.value).toBeInstanceOf(Buffer);
+			expect(formData.file2.options.filename).toBe('file2.txt');
+			expect(formData.image1.value).toBeInstanceOf(Buffer);
+			expect(formData.image1.options.filename).toBe('image1.png');
+		});
+
+		it('should upload only matching binary files when pattern is specified', async () => {
+			// Mock version 4.2 to use multipart-form-data
+			(executeFunctions.getNode as jest.Mock).mockReturnValue({
+				type: 'n8n-nodes-base.httpRequest',
+				typeVersion: 4.2,
+			});
+
+			// Mock input data with multiple binary files
+			const inputData = [
+				{
+					json: {},
+					binary: {
+						file1: {
+							data: Buffer.from('file1 content').toString('base64'),
+							mimeType: 'text/plain',
+							fileName: 'file1.txt',
+							fileExtension: 'txt',
+						},
+						file2: {
+							data: Buffer.from('file2 content').toString('base64'),
+							mimeType: 'text/plain',
+							fileName: 'file2.txt',
+							fileExtension: 'txt',
+						},
+						image1: {
+							data: Buffer.from('image content').toString('base64'),
+							mimeType: 'image/png',
+							fileName: 'image1.png',
+							fileExtension: 'png',
+						},
+					},
+				},
+			];
+
+			(executeFunctions.getInputData as jest.Mock).mockReturnValue(inputData);
+
+			// Use pattern to match only "file*" fields
+			(executeFunctions.getNodeParameter as jest.Mock).mockImplementation(
+				(paramName: string, itemIndex: number) => {
+					if (paramName === 'method') return 'POST';
+					if (paramName === 'url') return baseUrl;
+					if (paramName === 'authentication') return 'none';
+					if (paramName === 'sendBody') return true;
+					if (paramName === 'contentType') return 'multipart-form-data';
+					if (paramName === 'bodyParameters.parameters') {
+						return [
+							{
+								name: '',
+								value: '',
+								parameterType: 'formBinaryDataAll',
+								inputDataFieldPattern: 'file*',
+							},
+						];
+					}
+					if (paramName === 'options') return options;
+					return undefined;
+				},
+			);
+
+			// Mock assertBinaryData
+			(executeFunctions.helpers.assertBinaryData as jest.Mock).mockImplementation(
+				(itemIndex: number, fieldName: string) => {
+					return inputData[itemIndex].binary![fieldName];
+				},
+			);
+
+			const response = {
+				headers: { 'content-type': 'application/json' },
+				body: Buffer.from(JSON.stringify({ success: true })),
+			};
+
+			(executeFunctions.helpers.request as jest.Mock).mockResolvedValue(response);
+
+			const result = await node.execute.call(executeFunctions);
+
+			expect(result).toEqual([[{ json: { success: true }, pairedItem: { item: 0 } }]]);
+
+			// Verify that request was called with formData containing only matching files
+			const requestCall = (executeFunctions.helpers.request as jest.Mock).mock.calls[0][0];
+			expect(requestCall.formData).toBeDefined();
+
+			// Verify only "file*" matching files are included (file1, file2)
+			const formData = requestCall.formData;
+			expect(formData.file1).toBeDefined();
+			expect(formData.file1.options.filename).toBe('file1.txt');
+			expect(formData.file2).toBeDefined();
+			expect(formData.file2.options.filename).toBe('file2.txt');
+
+			// Verify image1 is NOT included (doesn't match "file*" pattern)
+			expect(formData.image1).toBeUndefined();
+		});
+	});
 });
