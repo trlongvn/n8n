@@ -382,6 +382,20 @@ describe('HttpRequestV3', () => {
 			// Verify that request was called with formData containing all files
 			const requestCall = (executeFunctions.helpers.request as jest.Mock).mock.calls[0][0];
 			expect(requestCall.formData).toBeDefined();
+
+			// Verify all three binary files are in formData
+			const formData = requestCall.formData;
+			expect(formData.file1).toBeDefined();
+			expect(formData.file2).toBeDefined();
+			expect(formData.image1).toBeDefined();
+
+			// Verify the structure of each entry
+			expect(formData.file1.value).toBeInstanceOf(Buffer);
+			expect(formData.file1.options.filename).toBe('file1.txt');
+			expect(formData.file2.value).toBeInstanceOf(Buffer);
+			expect(formData.file2.options.filename).toBe('file2.txt');
+			expect(formData.image1.value).toBeInstanceOf(Buffer);
+			expect(formData.image1.options.filename).toBe('image1.png');
 		});
 
 		it('should upload only matching binary files when pattern is specified', async () => {
@@ -464,6 +478,16 @@ describe('HttpRequestV3', () => {
 			// Verify that request was called with formData containing only matching files
 			const requestCall = (executeFunctions.helpers.request as jest.Mock).mock.calls[0][0];
 			expect(requestCall.formData).toBeDefined();
+
+			// Verify only "file*" matching files are included (file1, file2)
+			const formData = requestCall.formData;
+			expect(formData.file1).toBeDefined();
+			expect(formData.file1.options.filename).toBe('file1.txt');
+			expect(formData.file2).toBeDefined();
+			expect(formData.file2.options.filename).toBe('file2.txt');
+
+			// Verify image1 is NOT included (doesn't match "file*" pattern)
+			expect(formData.image1).toBeUndefined();
 		});
 	});
 });

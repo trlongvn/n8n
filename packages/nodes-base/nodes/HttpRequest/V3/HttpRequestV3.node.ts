@@ -438,7 +438,7 @@ export class HttpRequestV3 implements INodeType {
 						const matchesPattern = (fieldName: string, pattern: string): boolean => {
 							if (!pattern) return true; // No pattern means match all
 							const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
-							const regex = new RegExp(`^${regexPattern}$`, 'i');
+							const regex = new RegExp(`^${regexPattern}$`);
 							return regex.test(fieldName);
 						};
 
