@@ -1,0 +1,42 @@
+# =============================================================================
+# n8n Offline Build using Cache Image
+# =============================================================================
+# Purpose: Build n8n using the pre-cached dependencies image (no internet needed).
+#
+# Prerequisites:
+#   Build the cache image first:
+#     docker build -f docker/images/n8n-build-cache/Dockerfile -t n8n-build-cache:latest .
+#
+# Usage:
+#   docker build -f docker/images/n8n-build-cache/Dockerfile.build \
+#     --network=none \
+#     --build-arg CACHE_IMAGE=n8n-build-cache:latest \
+#     -t n8n-built:latest .
+#
+# The resulting image will contain the compiled n8n application at /app/compiled/
+# =============================================================================
+
+ARG CACHE_IMAGE=n8n-build-cache:latest
+
+FROM ${CACHE_IMAGE} AS builder
+
+WORKDIR /app
+
+# Copy all source code (node_modules is already present from cache image)
+COPY . .
+
+# Build n8n (offline — all deps already installed)
+ENV CI=true
+ENV N8N_SKIP_LICENSES=true
+RUN pnpm build
+
+# Production deploy step (creates optimized /app/compiled/ output)
+RUN node .github/scripts/trim-fe-packageJson.js 2>/dev/null || true && \
+    NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy --no-optional ./compiled
+
+# --- Output ---
+# The compiled n8n is at /app/compiled/
+# You can use this as a build stage in your final production Dockerfile:
+#
+#   FROM n8nio/base:24 AS production
+#   COPY --from=builder /app/compiled /usr/local/lib/node_modules/n8n
